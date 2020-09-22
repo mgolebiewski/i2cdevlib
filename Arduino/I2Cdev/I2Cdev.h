@@ -4,6 +4,7 @@
 //
 // Changelog:
 //      2020-01-20 - hardija : complete support for Teensy 3.x
+//      2016-03-22   eadf : added support for SoftI2CMaster
 //      2015-10-30 - simondlevy : support i2c_t3 for Teensy3.1
 //      2013-05-06 - add Francesco Ferrara's Fastwire v0.24 implementation with small modifications
 //      2013-05-05 - fix issue with writing bit values to words (Sasquatch/Farzanegan)
@@ -56,6 +57,8 @@ THE SOFTWARE.
 //#define I2CDEV_IMPLEMENTATION       I2CDEV_TEENSY_3X_WIRE
 //#define I2CDEV_IMPLEMENTATION       I2CDEV_BUILTIN_SBWIRE
 //#define I2CDEV_IMPLEMENTATION       I2CDEV_BUILTIN_FASTWIRE
+//#define I2CDEV_IMPLEMENTATION       I2CDEV_I2CMASTER_LIBRARY
+//#define I2CDEV_IMPLEMENTATION       I2CDEV_SOFTI2CMASTER_LIBRARY
 #endif // I2CDEV_IMPLEMENTATION
 
 // comment this out if you are using a non-optimal IDE/implementation setting
@@ -72,6 +75,7 @@ THE SOFTWARE.
 #define I2CDEV_I2CMASTER_LIBRARY    4 // I2C object from DSSCircuits I2C-Master Library at https://github.com/DSSCircuits/I2C-Master-Library
 #define I2CDEV_BUILTIN_SBWIRE	    5 // I2C object from Shuning (Steve) Bian's SBWire Library at https://github.com/freespace/SBWire 
 #define I2CDEV_TEENSY_3X_WIRE       6 // Teensy 3.x support using i2c_t3 library
+#define I2CDEV_SOFTI2CMASTER_LIBRARY  7 // Software based I2C library at https://github.com/felias-fogg/SoftI2CMaster
 
 // -----------------------------------------------------------------------------
 // Arduino-style "Serial.print" debug constant (uncomment to enable)
@@ -93,6 +97,54 @@ THE SOFTWARE.
     #if I2CDEV_IMPLEMENTATION == I2CDEV_I2CMASTER_LIBRARY
         #include <I2C.h>
     #endif
+	#if I2CDEV_IMPLEMENTATION == I2CDEV_SOFTI2CMASTER_LIBRARY
+        // We can't include SoftI2CMaster.h here. The header file defines the softi2c functions.
+        // If the header file is included multiple times in a project it will generate 
+        // "multiple definition of" errors.
+        // 
+        // The class SoftI2CMasterWire exposes the functions found in SoftI2CMaster.h.
+        
+        // When using the softi2cmaster these defines are required, change as you please.
+        // There are more #defines you can set for software i2c, see SoftI2CMaster.h.
+        #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+            // this example sets up the SoftI2CMaster library to use 
+            // pin 20 as SDA and pin 21 as SCL
+            #ifndef SDA_PORT
+                #define SDA_PORT PORTD
+            #endif
+            
+            #ifndef SDA_PIN
+                #define SDA_PIN 1
+            #endif
+        
+            #ifndef SCL_PORT
+                #define SCL_PORT PORTD
+            #endif
+        
+            #ifndef SCL_PIN
+                #define SCL_PIN 0
+            #endif
+            
+        #elif defined(__AVR_ATmega328P__) || defined(__AVR_ATmega168__)
+            // this example sets up the SoftI2CMaster library to use 
+            // pin A4 as SDA and pin A5 as SCL
+            #ifndef SDA_PORT
+                #define SDA_PORT PORTC
+            #endif
+            
+            #ifndef SDA_PIN
+                #define SDA_PIN 4
+            #endif
+        
+            #ifndef SCL_PORT
+                #define SCL_PORT PORTC
+            #endif
+        
+            #ifndef SCL_PIN
+                #define SCL_PIN 5
+            #endif
+        #endif
+    #endif
     #if I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_SBWIRE
         #include "SBWire.h"
     #endif
@@ -110,6 +162,10 @@ THE SOFTWARE.
 class I2Cdev {
     public:
         I2Cdev();
+
+        static bool begin();
+        static void setClock(uint32_t);
+        static void showImplementationInfo();
 
         static int8_t readBit(uint8_t devAddr, uint8_t regAddr, uint8_t bitNum, uint8_t *data, uint16_t timeout=I2Cdev::readTimeout);
         static int8_t readBitW(uint8_t devAddr, uint8_t regAddr, uint8_t bitNum, uint16_t *data, uint16_t timeout=I2Cdev::readTimeout);
@@ -285,5 +341,24 @@ class I2Cdev {
     extern TwoWire Wire;
 
 #endif // I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_NBWIRE
+
+#if I2CDEV_IMPLEMENTATION == I2CDEV_SOFTI2CMASTER_LIBRARY
+
+    /* wrapper for SoftI2CMaster
+     * https://github.com/felias-fogg/SoftI2CMaster
+     * The library is defined in a header file, so it can only be included once in 
+     * a link unit. This wrapper exposes those functions, if needed.
+     */
+    class SoftI2CMasterWire {
+        public:
+            static boolean init(void);
+            static bool start(uint8_t addr); 
+            static void start_wait(uint8_t addr);
+            static bool rep_start(uint8_t addr);
+            static void stop(void) ;
+            static bool write(uint8_t value);
+            static uint8_t read(bool last);
+    };
+#endif // I2CDEV_IMPLEMENTATION == I2CDEV_SOFTI2CMASTER_LIBRARY
 
 #endif /* _I2CDEV_H_ */
